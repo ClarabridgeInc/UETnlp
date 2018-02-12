@@ -1,9 +1,6 @@
 package vn.edu.vnu.uet.nlp.segmenter;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.ObjectInputStream;
+import java.io.*;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -15,10 +12,18 @@ import java.util.Set;
  */
 @SuppressWarnings("unchecked")
 public class FamilyName {
-	private static Set<String> nameList;
+	private Set<String> nameList;
 	private static String path = "dictionary/VNFamilyNameObject";
 
-	private static void getInstance() {
+	public FamilyName() {
+		getInstance();
+	}
+
+	public FamilyName(Set<String> loadedList) {
+		nameList = loadedList;
+	}
+
+	private void getInstance() {
 		nameList = new HashSet<String>();
 		FileInputStream fin = null;
 		try {
@@ -44,7 +49,8 @@ public class FamilyName {
 		}
 	}
 
-	public static boolean isVNFamilyName(String syl) {
+
+	public boolean isVNFamilyName(String syl) {
 		if (nameList == null) {
 			getInstance();
 		}

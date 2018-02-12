@@ -1,6 +1,7 @@
 package vn.edu.vnu.uet.nlp.segmenter;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -22,6 +23,8 @@ import vn.edu.vnu.uet.nlp.utils.Logging;
 public class FeatureExtractor {
 	private FeatureMap featureMap;
 	private List<List<SegmentFeature>> listOfSegmentFeatureLists;
+	private SyllableList syllableList;
+	private FamilyName familyName;
 
 	private static Map<String, String> normalizationMap;
 	private static Set<String> normalizationSet;
@@ -51,12 +54,24 @@ public class FeatureExtractor {
 	public FeatureExtractor() {
 		listOfSegmentFeatureLists = new ArrayList<List<SegmentFeature>>();
 		featureMap = new FeatureMap();
+		syllableList = new SyllableList();
+		familyName = new FamilyName();
 	}
 
 	public FeatureExtractor(String featMapPath) throws ClassNotFoundException, IOException {
 		listOfSegmentFeatureLists = new ArrayList<List<SegmentFeature>>();
 		featureMap = new FeatureMap();
+		syllableList = new SyllableList();
+		familyName = new FamilyName();
 		loadMap(featMapPath);
+	}
+
+	public FeatureExtractor(InputStream featMapStream, SyllableList sylList, FamilyName familyNameList) throws IOException, ClassNotFoundException {
+		listOfSegmentFeatureLists = new ArrayList<List<SegmentFeature>>();
+		featureMap = new FeatureMap();
+		loadMap(featMapStream);
+		syllableList = sylList;
+		familyName = familyNameList;
 	}
 
 	public void extract(List<String> sentences, int mode) {
@@ -68,9 +83,18 @@ public class FeatureExtractor {
 
 		}
 	}
+	public List<SyllabelFeature> extractTokenized(List<String> sentence, int mode) {
+		List<SyllabelFeature> sylList = convertToFeatureOfSyllabel(sentence, mode);
+		return extractHelper(sylList, mode);
+	}
 
 	public List<SyllabelFeature> extract(String sentence, int mode) {
 		List<SyllabelFeature> sylList = convertToFeatureOfSyllabel(sentence, mode);
+		return extractHelper(sylList, mode);
+	}
+
+	public List<SyllabelFeature> extractHelper(List<SyllabelFeature> sylList, int mode) {
+
 		int length = sylList.size();
 
 		if (length == 0) {
@@ -130,14 +154,14 @@ public class FeatureExtractor {
 			if (sylList.get(i).getType() == SyllableType.UPPER && sylList.get(i + 1).getType() == SyllableType.UPPER) {
 
 				// only one of them is a valid Vietnamese syllable
-				if ((SyllableList.isVNsyl(thisSyl) && !SyllableList.isVNsyl(nextSyl))
-						|| (SyllableList.isVNsyl(nextSyl) && !SyllableList.isVNsyl(thisSyl))) {
+				if ((syllableList.isVNsyl(thisSyl) && !syllableList.isVNsyl(nextSyl))
+						|| (syllableList.isVNsyl(nextSyl) && !syllableList.isVNsyl(thisSyl))) {
 					featureName = "(0:vi&&1:en)||(0:en&&1:vi)";
 					indexSet.add(featureMap.getIndex(featureName, mode));
 				}
 
 				// current syllable is Vietnamese family name
-				if (FamilyName.isVNFamilyName(thisSyl)) {
+				if (familyName.isVNFamilyName(thisSyl)) {
 					featureName = "0.isVNFamilyName";
 					indexSet.add(featureMap.getIndex(featureName, mode));
 				}
@@ -167,7 +191,23 @@ public class FeatureExtractor {
 		return sylList;
 	}
 
-	public static List<SyllabelFeature> convertToFeatureOfSyllabel(String sentence, int mode) {
+	public List<SyllabelFeature> convertToFeatureOfSyllabel(List<String> sentence, int mode) {
+		List<String> padding = new ArrayList<>();
+		List<String> paddedSentence = new ArrayList<>();
+		if (sentence.isEmpty()) {
+			return new ArrayList<SyllabelFeature>();
+		}
+
+		for (int i = 0; i < Configure.WINDOW_LENGTH; i++)
+			padding.add(StringConst.BOS);
+		paddedSentence.addAll(padding);
+		paddedSentence.addAll(sentence);
+		paddedSentence.addAll(padding);
+
+		return token(paddedSentence, mode);
+	}
+
+	public List<SyllabelFeature> convertToFeatureOfSyllabel(String sentence, int mode) {
 		String sent = sentence.trim();
 
 		if (sent.equals(StringConst.SPACE) || sent.isEmpty()) {
@@ -180,7 +220,40 @@ public class FeatureExtractor {
 		return token(sent, mode);
 	}
 
-	public static List<SyllabelFeature> token(String sent, int mode) {
+	public List<SyllabelFeature> token(List<String> tokens, int mode) {
+		List<SyllabelFeature> list = new ArrayList<SyllabelFeature>();
+
+		if (mode == Configure.TRAIN || mode == Configure.TEST) {
+			for (String token : tokens) {
+				if (token.contains(StringConst.UNDERSCORE)) {
+					String[] tmp = token.split(StringConst.UNDERSCORE);
+					for (int i = 0; i < tmp.length - 1; i++) {
+						String tmp_i = normalize(tmp[i]);
+						list.add(new SyllabelFeature(tmp_i, typeOf(tmp_i), Configure.UNDERSCORE));
+					}
+					try {
+						String tmp_last = normalize(tmp[tmp.length - 1]);
+						list.add(new SyllabelFeature(tmp_last, typeOf(tmp_last), Configure.SPACE));
+					} catch (Exception e) {
+						// System.out.println(tmp[tmp.length - 1]);
+					}
+				} else {
+					String tmp = normalize(token);
+					list.add(new SyllabelFeature(tmp, typeOf(tmp), Configure.SPACE));
+				}
+			}
+		} else {
+			for (String token : tokens) {
+				String tmp = normalize(token);
+				list.add(new SyllabelFeature(tmp, typeOf(tmp), Configure.SPACE));
+			}
+		}
+
+		return list;
+	}
+
+
+	public List<SyllabelFeature> token(String sent, int mode) {
 		List<SyllabelFeature> list = new ArrayList<SyllabelFeature>();
 		String[] tokens = sent.split("\\s+");
 
@@ -213,8 +286,8 @@ public class FeatureExtractor {
 		return list;
 	}
 
-	public static String normalize(String token) {
-		if (SyllableList.isVNsyl(token)) {
+	public  String normalize(String token) {
+		if (syllableList.isVNsyl(token)) {
 			return token;
 		}
 		for (String wrongTyping : normalizationSet) {
@@ -303,6 +376,10 @@ public class FeatureExtractor {
 
 	protected void loadMap(String path) throws ClassNotFoundException, IOException {
 		featureMap.load(path);
+	}
+
+	protected void loadMap(InputStream stream) throws ClassNotFoundException, IOException {
+		featureMap.load(stream);
 	}
 
 	protected void clearList() {

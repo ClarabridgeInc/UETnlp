@@ -1,9 +1,6 @@
 package vn.edu.vnu.uet.nlp.segmenter;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.ObjectInputStream;
+import java.io.*;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -15,10 +12,18 @@ import java.util.Set;
  */
 @SuppressWarnings("unchecked")
 public class Dictionary {
-	private static Set<String> dict;
+	private Set<String> dict;
 	private static String path = "dictionary/VNDictObject";
 
-	private static void getInstance() {
+	public Dictionary() {
+		getInstance();
+	}
+
+	public Dictionary(Set<String> loadedDict) {
+		dict = loadedDict;
+	}
+
+	private void getInstance() {
 		dict = new HashSet<String>();
 		FileInputStream fin = null;
 		try {
@@ -44,7 +49,7 @@ public class Dictionary {
 		}
 	}
 
-	public static boolean inVNDict(String word) {
+	public boolean inVNDict(String word) {
 		if (word == null || word.isEmpty())
 			return false;
 		if (dict == null) {

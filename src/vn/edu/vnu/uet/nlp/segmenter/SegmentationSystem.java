@@ -10,6 +10,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.SortedSet;
 
+import edu.emory.clir.clearnlp.collection.pair.Pair;
 import vn.edu.vnu.uet.liblinear.Feature;
 import vn.edu.vnu.uet.liblinear.FeatureNode;
 import vn.edu.vnu.uet.liblinear.Linear;
@@ -41,6 +42,9 @@ public class SegmentationSystem {
 	private int N1 = 0, N2 = 0, N3 = 0; // use for evaluation
 	private double[] confidences;
 
+	private Dictionary dictionary;
+	private RareNames rareNames;
+
 	// Constructor for TRAINING
 	public SegmentationSystem(FeatureExtractor _fe, String pathToSave) {
 		this.problem = new Problem();
@@ -55,6 +59,8 @@ public class SegmentationSystem {
 		}
 
 		this.n = fe.getFeatureMap().getSize();
+		dictionary = new Dictionary();
+		rareNames = new RareNames();
 	}
 
 	// Constructor for TESTING and SEGMENTING
@@ -62,6 +68,20 @@ public class SegmentationSystem {
 		problem = new Problem();
 		parameter = new Parameter(SolverType.L2R_LR, 1.0, 0.01);
 		load(folderpath);
+		dictionary = new Dictionary();
+		rareNames = new RareNames();
+	}
+
+	public SegmentationSystem(Model segmenterModel, FeatureExtractor segmenterFeatureExtractor, Dictionary dictionary, RareNames rareNames) throws ClassNotFoundException, IOException {
+		problem = new Problem();
+		parameter = new Parameter(SolverType.L2R_LR, 1.0, 0.01);
+
+		model = segmenterModel;
+		fe = segmenterFeatureExtractor;
+		pathToSave = null;
+		n = fe.getFeatureMap().getSize();
+		this.dictionary = dictionary;
+		this.rareNames = rareNames;
 	}
 
 	// Convert to problem's format of LIBLINEAR
@@ -298,10 +318,10 @@ public class SegmentationSystem {
 		if (fe.getSegmentList().get(0).isEmpty()) {
 
 			if (sylList.size() == 2 * Configure.WINDOW_LENGTH + 1) { // Sentences
-																		// has
-																		// only
-																		// one
-																		// token
+				// has
+				// only
+				// one
+				// token
 				return sylList.get(Configure.WINDOW_LENGTH).getSyllabel();
 
 			} else // Sentence is empty
@@ -351,6 +371,87 @@ public class SegmentationSystem {
 		return sb.toString().trim();
 	}
 
+
+	/**
+	 * @param sentence
+	 *            A tokenized sentence
+	 * @return The word-segmented sentence
+	 */
+	public List<Pair<String, Integer>> segmentTokenized(List<String> sentence) {
+		fe.clearList();
+		segmentList = new ArrayList<SyllabelFeature>();
+		List<SyllabelFeature> sylList = fe.extractTokenized(sentence, Configure.TEST);
+
+		List<Pair<String, Integer>> result = new ArrayList<>();
+
+		// No feature set returned
+		if (fe.getSegmentList().isEmpty()) {
+			return result;
+		}
+
+		if (fe.getSegmentList().get(0).isEmpty()) {
+
+			if (sylList.size() == 2 * Configure.WINDOW_LENGTH + 1) { // Sentences
+				// has
+				// only
+				// one
+				// token
+				result.add(new Pair<>(sylList.get(Configure.WINDOW_LENGTH).getSyllabel(), 1));
+				return result;
+
+			} else // Sentence is empty
+				return result;
+		}
+
+		for (int i = Configure.WINDOW_LENGTH; i < sylList.size() - Configure.WINDOW_LENGTH; i++) {
+			segmentList.add(sylList.get(i));
+		}
+
+		sylList.clear();
+
+		int size = segmentList.size() - 1;
+
+		double[] predictions = new double[size];
+
+		confidences = new double[size];
+
+		for (int i = 0; i < size; i++) {
+			confidences[i] = Double.MIN_VALUE;
+		}
+
+		// Convert features to FeatureNode structure of LIBLINEAR
+		setProblem();
+
+		// Processing the prediction
+		process(predictions, size, Configure.PREDICT);
+
+		// Get the result
+		boolean newWord = true;
+		for (int i = 0; i < size; i++) {
+			String nextSyl = segmentList.get(i).getSyllabel();
+			if (newWord) {
+				result.add(new Pair<>(nextSyl, 1));
+			} else {
+				int idx = result.size() - 1;
+				Pair<String, Integer> prev = result.get(idx);
+				prev.set(prev.o1 + " " + nextSyl, prev.o2 + 1);
+				result.set(idx, prev);
+			}
+			if (predictions[i] != Configure.SPACE)
+				newWord = false;
+			else
+				newWord = true;
+		}
+		result.add(new Pair<>(segmentList.get(size).getSyllabel(), 1));
+
+		// Clear the list of FeatureExtractor
+		// and clear the problem
+		// to prepare for the next segmentation
+		delProblem();
+
+		return result;
+	}
+
 	private void process(double[] predictions, int size, int mode) {
 		// Longest matching for over2-syllable words
 		longestMatching(predictions, size, mode);
@@ -395,7 +496,7 @@ public class SegmentationSystem {
 				if (j == i + n) {
 					String word = sb.toString();
 
-					if (n > 2 && hasLower && Dictionary.inVNDict(word)) {
+					if (n > 2 && hasLower && dictionary.inVNDict(word)) {
 
 						for (int k = i; k < j - 1; k++) {
 							predictions[k] = Configure.UNDERSCORE;
@@ -405,7 +506,7 @@ public class SegmentationSystem {
 						break;
 					}
 					// if (mode != Configure.TEST) {
-					if (hasUpper && RareNames.isRareName(word)) {
+					if (hasUpper && rareNames.isRareName(word)) {
 
 						for (int k = i; k < j - 1; k++) {
 							predictions[k] = Configure.UNDERSCORE;
@@ -498,11 +599,11 @@ public class SegmentationSystem {
 
 						String word1 = thisOne + " " + nextOne;
 
-						if (Dictionary.inVNDict(word1)) {
+						if (dictionary.inVNDict(word1)) {
 							predictions[i] = Configure.UNDERSCORE;
 						}
 
-						if (!(Dictionary.inVNDict(word1))) {
+						if (!(dictionary.inVNDict(word1))) {
 							predictions[i] = Configure.SPACE;
 						}
 					}
@@ -541,24 +642,24 @@ public class SegmentationSystem {
 						String word = segmentList.get(i).getSyllabel() + " " + segmentList.get(i + 1).getSyllabel()
 								+ " " + segmentList.get(i + 2).getSyllabel();
 						// khong co trong tu dien
-						if (!Dictionary.inVNDict(word) && !RareNames.isRareName(word)) {
+						if (!dictionary.inVNDict(word) && !rareNames.isRareName(word)) {
 							String leftWord = segmentList.get(i).getSyllabel() + " "
 									+ segmentList.get(i + 1).getSyllabel();
 							String rightWord = segmentList.get(i + 1).getSyllabel() + " "
 									+ segmentList.get(i + 2).getSyllabel();
 
 							// s1s2 in dict, s2s3 not in dict
-							if (Dictionary.inVNDict(leftWord) && !Dictionary.inVNDict(rightWord)) {
+							if (dictionary.inVNDict(leftWord) && !dictionary.inVNDict(rightWord)) {
 								predictions[i + 1] = Configure.SPACE;
 							}
 
 							// s1s2 not in dict, s2s3 in dict
-							if (Dictionary.inVNDict(rightWord) && !Dictionary.inVNDict(leftWord)) {
+							if (dictionary.inVNDict(rightWord) && !dictionary.inVNDict(leftWord)) {
 								predictions[i] = Configure.SPACE;
 							}
 
 							// both in dict
-							if (Dictionary.inVNDict(rightWord) && Dictionary.inVNDict(leftWord)) {
+							if (dictionary.inVNDict(rightWord) && dictionary.inVNDict(leftWord)) {
 								if (confidences[i] * confidences[i + 1] > 0) {
 									if (Math.abs(confidences[i]) < Math.abs(confidences[i + 1])) {
 										predictions[i] = Configure.SPACE;
@@ -569,7 +670,7 @@ public class SegmentationSystem {
 							}
 
 							// none of them in dict
-							if (!Dictionary.inVNDict(rightWord) && !Dictionary.inVNDict(leftWord)) {
+							if (!dictionary.inVNDict(rightWord) && !dictionary.inVNDict(leftWord)) {
 
 								if (segmentList.get(i).getType() == SyllableType.LOWER
 										|| segmentList.get(i + 1).getType() == SyllableType.LOWER) {

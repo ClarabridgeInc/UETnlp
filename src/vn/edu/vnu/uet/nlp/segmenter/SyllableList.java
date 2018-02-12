@@ -1,9 +1,6 @@
 package vn.edu.vnu.uet.nlp.segmenter;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.ObjectInputStream;
+import java.io.*;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -15,10 +12,18 @@ import java.util.Set;
  */
 @SuppressWarnings("unchecked")
 public class SyllableList {
-	private static Set<String> sylList;
+	private Set<String> sylList;
 	private static String path = "dictionary/VNsylObject";
 
-	private static void getInstance() {
+	public SyllableList(Set<String> loadedList) {
+		sylList = loadedList;
+	}
+
+	public SyllableList() {
+		getInstance();
+	}
+
+	private void getInstance() {
 		sylList = new HashSet<String>();
 		FileInputStream fin = null;
 		try {
@@ -44,10 +49,7 @@ public class SyllableList {
 		}
 	}
 
-	public static boolean isVNsyl(String syl) {
-		if (sylList == null) {
-			getInstance();
-		}
+	public boolean isVNsyl(String syl) {
 		return sylList.contains(syl.trim().toLowerCase());
 	}
 

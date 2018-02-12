@@ -18,34 +18,42 @@ import java.util.Set;
  * 
  */
 public class RareNames {
-	private static Set<String> list;
+	private Set<String> list;
 	private static String path = "dictionary/rare_names.txt";
 
-	private static void getInstance() throws IOException {
+	public RareNames() {
+		getInstance();
+	}
+
+	public RareNames(Set<String> nameList) {
+		list = nameList;
+	}
+
+	private void getInstance() {
 		list = new HashSet<String>();
 
 		Path p = Paths.get(path);
-		BufferedReader br = Files.newBufferedReader(p, StandardCharsets.UTF_8);
+		BufferedReader br = null;
+		try {
+			br = Files.newBufferedReader(p, StandardCharsets.UTF_8);
+			String line = null;
 
-		String line = null;
-
-		while ((line = br.readLine()) != null) {
-			if (!line.isEmpty()) {
-				list.add(line.toLowerCase().trim());
+			while ((line = br.readLine()) != null) {
+				if (!line.isEmpty()) {
+					list.add(line.toLowerCase().trim());
+				}
 			}
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.err.println("The dictionary of rare names 'dictionary/rare_names.txt' is not found!");
 		}
 	}
 
-	public static boolean isRareName(String word) {
+	public boolean isRareName(String word) {
 		if (word == null || word.isEmpty())
 			return false;
 		if (list == null) {
-			try {
-				getInstance();
-			} catch (IOException e) {
-				System.err.println("The dictionary of rare names 'dictionary/rare_names.txt' is not found!");
-				return false;
-			}
+			getInstance();
 		}
 
 		return list.contains(word.trim().toLowerCase());

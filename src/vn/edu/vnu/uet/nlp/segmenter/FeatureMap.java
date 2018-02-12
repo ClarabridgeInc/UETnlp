@@ -1,11 +1,6 @@
 package vn.edu.vnu.uet.nlp.segmenter;
 
-import java.io.BufferedWriter;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -61,6 +56,12 @@ public class FeatureMap {
 	public void load(String path) throws IOException, ClassNotFoundException {
 		FileInputStream fin = new FileInputStream(path);
 		ObjectInputStream ois = new ObjectInputStream(fin);
+		map = (HashMap<String, Integer>) ois.readObject();
+		ois.close();
+	}
+
+	public void load(InputStream stream) throws IOException, ClassNotFoundException {
+		ObjectInputStream ois = new ObjectInputStream(stream);
 		map = (HashMap<String, Integer>) ois.readObject();
 		ois.close();
 	}
