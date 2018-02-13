@@ -223,32 +223,10 @@ public class FeatureExtractor {
 	public List<SyllabelFeature> token(List<String> tokens, int mode) {
 		List<SyllabelFeature> list = new ArrayList<SyllabelFeature>();
 
-		if (mode == Configure.TRAIN || mode == Configure.TEST) {
-			for (String token : tokens) {
-				if (token.contains(StringConst.UNDERSCORE)) {
-					String[] tmp = token.split(StringConst.UNDERSCORE);
-					for (int i = 0; i < tmp.length - 1; i++) {
-						String tmp_i = normalize(tmp[i]);
-						list.add(new SyllabelFeature(tmp_i, typeOf(tmp_i), Configure.UNDERSCORE));
-					}
-					try {
-						String tmp_last = normalize(tmp[tmp.length - 1]);
-						list.add(new SyllabelFeature(tmp_last, typeOf(tmp_last), Configure.SPACE));
-					} catch (Exception e) {
-						// System.out.println(tmp[tmp.length - 1]);
-					}
-				} else {
-					String tmp = normalize(token);
-					list.add(new SyllabelFeature(tmp, typeOf(tmp), Configure.SPACE));
-				}
-			}
-		} else {
-			for (String token : tokens) {
+		for (String token : tokens) {
 				String tmp = normalize(token);
 				list.add(new SyllabelFeature(tmp, typeOf(tmp), Configure.SPACE));
-			}
 		}
-
 		return list;
 	}
 
