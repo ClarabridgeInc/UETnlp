@@ -3,10 +3,11 @@
  * by 'eliana' at '2/12/18 10:20 AM' with Gradle 2.7
  */
 
-// Apply the java plugin to add support for Java
-apply plugin: 'java'
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
 
-version = '1.0.1'
 
 repositories {
     mavenCentral()
@@ -37,3 +38,26 @@ task fatJar(type: Jar) {
     from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
     with jar
 }
+
+publishing {
+    publications {
+        uetnlp(MavenPublication) {
+            groupId project.group
+            artifactId project.name.toLowerCase()
+            version project.version
+
+            artifact fatJar
+        }
+    }
+    repositories {
+        maven {
+            url project.'nexus.repo.publish'
+            credentials {
+                username = project.'nexus.deploy.user'
+                password = project.'nexus.deploy.password'
+            }
+        }
+    }
+}
+
+publish.dependsOn build, fatJar
