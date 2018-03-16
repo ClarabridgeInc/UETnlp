@@ -18,7 +18,9 @@ import vn.edu.vnu.uet.liblinear.Model;
 import vn.edu.vnu.uet.liblinear.Parameter;
 import vn.edu.vnu.uet.liblinear.Problem;
 import vn.edu.vnu.uet.liblinear.SolverType;
+import vn.edu.vnu.uet.nlp.segmenter.experiments.Segment;
 import vn.edu.vnu.uet.nlp.segmenter.measurement.F1Score;
+import vn.edu.vnu.uet.nlp.segmenter.measurement.ScoreKeeper;
 import vn.edu.vnu.uet.nlp.tokenizer.StringConst;
 import vn.edu.vnu.uet.nlp.utils.FileUtils;
 import vn.edu.vnu.uet.nlp.utils.Logging;
@@ -32,27 +34,20 @@ import vn.edu.vnu.uet.nlp.utils.Logging;
  */
 public class SegmentationSystem {
 	private static double r = 0.33;
-	private Problem problem;
 	private Parameter parameter;
 	private Model model;
 	private FeatureExtractor fe;
 	private String pathToSave = "models";
 	private int n; // number of unique features, used as parameter of LIBLINEAR
-	private List<SyllabelFeature> segmentList;
-	private int N1 = 0, N2 = 0, N3 = 0; // use for evaluation
-	private double[] confidences;
 
 	private Dictionary dictionary;
 	private RareNames rareNames;
 
 	// Constructor for TRAINING
 	public SegmentationSystem(FeatureExtractor _fe, String pathToSave) {
-		this.problem = new Problem();
 		this.parameter = new Parameter(SolverType.L2R_LR, 1.0, 0.01);
-		this.model = new Model();
 		this.fe = _fe;
 		this.pathToSave = pathToSave;
-		// Create folder if not exist
 		File file = new File(pathToSave);
 		if (!file.exists()) {
 			file.mkdirs();
@@ -65,7 +60,6 @@ public class SegmentationSystem {
 
 	// Constructor for TESTING and SEGMENTING
 	public SegmentationSystem(String folderpath) throws ClassNotFoundException, IOException {
-		problem = new Problem();
 		parameter = new Parameter(SolverType.L2R_LR, 1.0, 0.01);
 		load(folderpath);
 		dictionary = new Dictionary();
@@ -73,7 +67,6 @@ public class SegmentationSystem {
 	}
 
 	public SegmentationSystem(Model segmenterModel, FeatureExtractor segmenterFeatureExtractor, Dictionary dictionary, RareNames rareNames) throws ClassNotFoundException, IOException {
-		problem = new Problem();
 		parameter = new Parameter(SolverType.L2R_LR, 1.0, 0.01);
 
 		model = segmenterModel;
@@ -85,8 +78,7 @@ public class SegmentationSystem {
 	}
 
 	// Convert to problem's format of LIBLINEAR
-	private void setProblem() {
-		int numSamples = fe.getNumSamples();
+	private Problem setProblem(int numSamples, int numSentences, List<List<SegmentFeature>> segmentList) {
 		FeatureNode[][] x = new FeatureNode[numSamples][];
 		double[] y = new double[numSamples];
 
@@ -94,11 +86,11 @@ public class SegmentationSystem {
 
 		int sampleNo = 0;
 
-		for (int s = 0; s < fe.getNumSents(); s++) {
-			for (int i = 0; i < fe.getSegmentList().get(s).size(); i++) {
-				y[sampleNo] = fe.getSegmentList().get(s).get(i).getLabel();
+		for (int s = 0; s < numSentences; s++) {
+			for (int i = 0; i < segmentList.get(s).size(); i++) {
+				y[sampleNo] = segmentList.get(s).get(i).getLabel();
 
-				featSet = fe.getSegmentList().get(s).get(i).getFeatset();
+				featSet = segmentList.get(s).get(i).getFeatset();
 
 				x[sampleNo] = new FeatureNode[featSet.size()];
 
@@ -114,33 +106,70 @@ public class SegmentationSystem {
 				sampleNo++;
 			}
 		}
-
+		Problem problem = new Problem();
 		problem.l = numSamples;
 		problem.n = n;
 		problem.y = y;
 		problem.x = x;
 		problem.bias = -1;
+
+		return problem;
+	}
+
+
+	// Convert to problem's format of LIBLINEAR
+	private Problem setProblem(int numSamples, List<SegmentFeature> segmentList) {
+		FeatureNode[][] x = new FeatureNode[numSamples][];
+		double[] y = new double[numSamples];
+
+		SortedSet<Integer> featSet;
+
+		int sampleNo = 0;
+
+		for (SegmentFeature segmentFeature : segmentList) {
+			y[sampleNo] = segmentFeature.getLabel();
+
+			featSet = segmentFeature.getFeatset();
+
+			x[sampleNo] = new FeatureNode[featSet.size()];
+
+			int cnt = 0;
+			for (Integer t : featSet) {
+				x[sampleNo][cnt] = new FeatureNode(
+						t + 1 /* Feature index must be greater than 0 */, 1.0);
+				cnt++;
+			}
+
+			// free the memory
+			featSet.clear();
+			sampleNo++;
+		}
+		Problem problem = new Problem();
+		problem.l = numSamples;
+		problem.n = n;
+		problem.y = y;
+		problem.x = x;
+		problem.bias = -1;
+
+		return problem;
 	}
 
 	/**
 	 * Training the logistic regression classifier.
 	 */
-	public void train() {
+	public void train(int numSamples, int numSentences, List<List<SegmentFeature>> segmentList) {
 		Logging.LOG.info("saving feature map");
 		saveMap();
 
-		Logging.LOG.info("clear the map to free memory");
-		fe.clearMap();
-
 		Logging.LOG.info("setting up the problem");
-		setProblem();
+		Problem problem = setProblem(numSamples, numSentences, segmentList);
 
 		Logging.LOG.info("start training");
-		model = Linear.train(problem, parameter);
+		Model model = Linear.train(problem, parameter);
 		Logging.LOG.info("finish training");
 
 		Logging.LOG.info("saving model");
-		saveModel();
+		saveModel(model);
 
 		Logging.LOG.info("finish.");
 	}
@@ -153,10 +182,7 @@ public class SegmentationSystem {
 	 */
 	public F1Score test(List<String> sentences) throws IOException {
 		int sentCnt = 0;
-		N1 = 0; // number of words recognized by the system
-		N2 = 0; // number of words in the manually segmented text
-		N3 = 0; // number of right segmented words.
-
+		ScoreKeeper score = new ScoreKeeper();
 		// create log file
 		try {
 			File fol = new File("log");
@@ -171,7 +197,7 @@ public class SegmentationSystem {
 		int sentID = 1;
 		for (String sentence : sentences) {
 			sentence = Normalizer.normalize(sentence, Form.NFC);
-			if (testSentence(sentence)) {
+			if (testSentence(sentence, score)) {
 				sentCnt++;
 			}
 
@@ -184,15 +210,15 @@ public class SegmentationSystem {
 
 		bw.close();
 
-		F1Score result = new F1Score(N1, N2, N3);
+		F1Score result = new F1Score(score.getN1(), score.getN2(), score.getN3());
 
 		double pre = result.getPrecision();
 		double rec = result.getRecall();
 		double f_measure = result.getF1Score();
 
-		System.out.println("\n" + "Number of words recognized by the system:\t\t\t\tN1 = " + N1
-				+ "\nNumber of words in reality appearing in the corpus:\t\tN2 = " + N2
-				+ "\nNumber of words that are correctly recognized by the system:\tN3 = " + N3 + "\n");
+		System.out.println("\n" + "Number of words recognized by the system:\t\t\t\tN1 = " + score.getN1()
+				+ "\nNumber of words in reality appearing in the corpus:\t\tN2 = " + score.getN2()
+				+ "\nNumber of words that are correctly recognized by the system:\tN3 = " + score.getN3() + "\n");
 		System.out.println("Precision\t\tP = N3/N1\t\t=\t" + pre + "%");
 		System.out.println("Recall\t\tR = N3/N2\t\t=\t" + rec + "%");
 		System.out.println("\nF-Measure\t\tF = (2*P*R)/(P+R)\t=\t" + f_measure + "%\n");
@@ -212,28 +238,21 @@ public class SegmentationSystem {
 	 *            A word-segmented sentence
 	 * @return Whether the system can produce a right segmented sentence or not.
 	 */
-	private boolean testSentence(String sentence) {
+	private boolean testSentence(String sentence, ScoreKeeper score) {
 		boolean sentCheck = true;
 
-		fe.clearList();
-		segmentList = new ArrayList<SyllabelFeature>();
-		List<SyllabelFeature> sylList = fe.extract(sentence, Configure.TEST);
+		ArrayList<SyllabelFeature> segmentList = new ArrayList<>();
+		ExtractedFeatures extractedFeatures = fe.extract(sentence, Configure.TEST);
 
-		// No feature set returned
-		if (fe.getSegmentList().isEmpty()) {
-			return true;
-		}
+		List<SyllabelFeature> sylList = extractedFeatures.getSylList();
+		List<SegmentFeature> segmentFeatures = extractedFeatures.getSegmentList();
 
-		if (fe.getSegmentList().get(0).isEmpty()) {
+		if (segmentFeatures.isEmpty()) {
 
-			if (sylList.size() == 2 * Configure.WINDOW_LENGTH + 1) { // Sentences
-																		// has
-																		// only
-																		// one
-																		// token
-				N1++;
-				N2++;
-				N3++;
+			if (sylList.size() == 2 * Configure.WINDOW_LENGTH + 1) { // Sentence has only one token
+				score.incrementN1();
+				score.incrementN2();
+				score.incrementN3();
 
 				return true;
 
@@ -253,7 +272,7 @@ public class SegmentationSystem {
 
 		double[] predictions = new double[size];
 
-		confidences = new double[size];
+		double[] confidences = new double[size];
 
 		for (int i = 0; i < size; i++) {
 			reality[i] = segmentList.get(i).getLabel();
@@ -261,24 +280,24 @@ public class SegmentationSystem {
 		}
 
 		// Convert features to FeatureNode structure of LIBLINEAR
-		setProblem();
+		Problem problem = setProblem(extractedFeatures.getNumSamples(), extractedFeatures.getSegmentList());
 
 		// Processing the prediction
-		process(predictions, size, Configure.TEST);
+		process(segmentList, problem, predictions, confidences, size, Configure.TEST);
 
 		// Get the comparision
 		boolean previousSpaceMatch = true;
 
 		for (int i = 0; i < size; i++) {
 			if (reality[i] == Configure.SPACE) {
-				N2++;
+				score.incrementN2();
 			}
 
 			if (predictions[i] == Configure.SPACE) {
-				N1++;
+				score.incrementN1();
 				if (reality[i] == Configure.SPACE) {
 					if (previousSpaceMatch) {
-						N3++;
+						score.incrementN3();
 					}
 					previousSpaceMatch = true;
 				}
@@ -290,10 +309,10 @@ public class SegmentationSystem {
 			}
 		}
 		// The last word of sentence
-		N1++;
-		N2++;
+		score.incrementN1();
+		score.incrementN2();
 		if (previousSpaceMatch) {
-			N3++;
+			score.incrementN3();
 		}
 
 		return sentCheck;
@@ -306,22 +325,13 @@ public class SegmentationSystem {
 	 * @return The word-segmented sentence
 	 */
 	public String segment(String sentence) {
-		fe.clearList();
-		segmentList = new ArrayList<SyllabelFeature>();
-		List<SyllabelFeature> sylList = fe.extract(sentence, Configure.TEST);
+		ArrayList<SyllabelFeature> segmentList = new ArrayList<>();
+		ExtractedFeatures extractedFeatures = fe.extract(sentence, Configure.TEST);
+		List<SyllabelFeature> sylList = extractedFeatures.getSylList();
 
 		// No feature set returned
-		if (fe.getSegmentList().isEmpty()) {
-			return "";
-		}
-
-		if (fe.getSegmentList().get(0).isEmpty()) {
-
-			if (sylList.size() == 2 * Configure.WINDOW_LENGTH + 1) { // Sentences
-				// has
-				// only
-				// one
-				// token
+		if (extractedFeatures.getSegmentList().isEmpty()) {
+			if (sylList.size() == 2 * Configure.WINDOW_LENGTH + 1) { // Sentence has only one token
 				return sylList.get(Configure.WINDOW_LENGTH).getSyllabel();
 
 			} else // Sentence is empty
@@ -332,23 +342,21 @@ public class SegmentationSystem {
 			segmentList.add(sylList.get(i));
 		}
 
-		sylList.clear();
-
 		int size = segmentList.size() - 1;
 
 		double[] predictions = new double[size];
 
-		confidences = new double[size];
+		double[] confidences = new double[size];
 
 		for (int i = 0; i < size; i++) {
 			confidences[i] = Double.MIN_VALUE;
 		}
 
 		// Convert features to FeatureNode structure of LIBLINEAR
-		setProblem();
+		Problem problem = setProblem(extractedFeatures.getNumSamples(), extractedFeatures.getSegmentList());
 
 		// Processing the prediction
-		process(predictions, size, Configure.PREDICT);
+		process(segmentList, problem, predictions, confidences, size, Configure.PREDICT);
 
 		// Get the result
 		StringBuilder sb = new StringBuilder();
@@ -363,11 +371,6 @@ public class SegmentationSystem {
 		}
 		sb.append(segmentList.get(size).getSyllabel());
 
-		// Clear the list of FeatureExtractor
-		// and clear the problem
-		// to prepare for the next segmentation
-		delProblem();
-
 		return sb.toString().trim();
 	}
 
@@ -378,24 +381,16 @@ public class SegmentationSystem {
 	 * @return The word-segmented sentence
 	 */
 	public List<Pair<String, Integer>> segmentTokenized(List<String> sentence) {
-		fe.clearList();
-		segmentList = new ArrayList<SyllabelFeature>();
-		List<SyllabelFeature> sylList = fe.extractTokenized(sentence, Configure.TEST);
+		ArrayList<SyllabelFeature> segmentList = new ArrayList<>();
+		ExtractedFeatures extractedFeatures = fe.extractTokenized(sentence, Configure.TEST);
+		List<SyllabelFeature> sylList = extractedFeatures.getSylList();
+		List<SegmentFeature> segmentFeatures = extractedFeatures.getSegmentList();
 
 		List<Pair<String, Integer>> result = new ArrayList<>();
 
-		// No feature set returned
-		if (fe.getSegmentList().isEmpty()) {
-			return result;
-		}
+		if (segmentFeatures.isEmpty()) {
 
-		if (fe.getSegmentList().get(0).isEmpty()) {
-
-			if (sylList.size() == 2 * Configure.WINDOW_LENGTH + 1) { // Sentences
-				// has
-				// only
-				// one
-				// token
+			if (sylList.size() == 2 * Configure.WINDOW_LENGTH + 1) { // Sentence has only one token
 				result.add(new Pair<>(sylList.get(Configure.WINDOW_LENGTH).getSyllabel(), 1));
 				return result;
 
@@ -413,17 +408,17 @@ public class SegmentationSystem {
 
 		double[] predictions = new double[size];
 
-		confidences = new double[size];
+		double[] confidences = new double[size];
 
 		for (int i = 0; i < size; i++) {
 			confidences[i] = Double.MIN_VALUE;
 		}
 
 		// Convert features to FeatureNode structure of LIBLINEAR
-		setProblem();
+		Problem problem = setProblem(extractedFeatures.getNumSamples(), extractedFeatures.getSegmentList());
 
 		// Processing the prediction
-		process(predictions, size, Configure.PREDICT);
+		process(segmentList, problem, predictions, confidences, size, Configure.PREDICT);
 
 		// Get the result
 		boolean newWord = true;
@@ -444,27 +439,22 @@ public class SegmentationSystem {
 		}
 		result.add(new Pair<>(segmentList.get(size).getSyllabel(), 1));
 
-		// Clear the list of FeatureExtractor
-		// and clear the problem
-		// to prepare for the next segmentation
-		delProblem();
-
 		return result;
 	}
 
-	private void process(double[] predictions, int size, int mode) {
+	private void process(List<SyllabelFeature> segmentList, Problem problem, double[] predictions, double[] confidences, int size, int mode) {
 		// Longest matching for over2-syllable words
-		longestMatching(predictions, size, mode);
+		longestMatching(segmentList, predictions, size, mode);
 
 		// Logistic regression
-		logisticRegression(predictions, size, mode);
+		logisticRegression(problem, predictions, confidences, size, mode);
 
 		// Other post processing
-		postProcessing(predictions, size, mode);
+		postProcessing(segmentList, predictions, confidences, size, mode);
 	}
 
 	// Longest matching for over-2-syllable words
-	private void longestMatching(double[] predictions, int size, int mode) {
+	private void longestMatching(List<SyllabelFeature> segmentList, double[] predictions, int size, int mode) {
 		for (int i = 0; i < size; i++) {
 			if (segmentList.get(i).getType() == SyllableType.OTHER)
 				continue;
@@ -524,7 +514,7 @@ public class SegmentationSystem {
 	}
 
 	@SuppressWarnings("unused")
-	private void ruleForProperName(double[] predictions, int size, int mode) {
+	private void ruleForProperName(List<SyllabelFeature> segmentList, double[] predictions, int size, int mode) {
 		double[] temp = new double[size];
 		for (int i = 0; i < size; i++) {
 			temp[i] = predictions[i];
@@ -545,7 +535,7 @@ public class SegmentationSystem {
 		}
 	}
 
-	private void logisticRegression(double[] predictions, int size, int mode) {
+	private void logisticRegression(Problem problem, double[] predictions, double[] confidences, int size, int mode) {
 		double[] temp = new double[size];
 		for (int i = 0; i < size; i++) {
 			temp[i] = predictions[i];
@@ -555,14 +545,14 @@ public class SegmentationSystem {
 				if ((i == 0 || temp[i - 1] != Configure.UNDERSCORE)
 						&& (i == size - 1 || temp[i + 1] != Configure.UNDERSCORE)) {
 					// Machine Learning
-					predictions[i] = predict(problem.x[i], i, mode);
+					predictions[i] = predict(confidences, problem.x[i], i, mode);
 				}
 			}
 		}
 	}
 
 	// Logistic regression classifier
-	private double predict(Feature[] featSet, int sampleNo, int mode) {
+	private double predict(double[] confidences, Feature[] featSet, int sampleNo, int mode) {
 
 		double[] dec_values = new double[model.getNrClass()];
 		double result = Linear.predict(model, featSet, dec_values);
@@ -573,7 +563,7 @@ public class SegmentationSystem {
 	}
 
 	// Post-processing
-	private void postProcessing(double[] predictions, int size, int mode) {
+	private void postProcessing(List<SyllabelFeature> segmentList, double[] predictions, double[] confidences, int size, int mode) {
 		if (size < 2) {
 			return;
 		}
@@ -692,20 +682,12 @@ public class SegmentationSystem {
 		}
 	}
 
-	private void delProblem() {
-		problem = new Problem();
-		fe.clearList();
-		if (segmentList != null) {
-			segmentList.clear();
-		}
-	}
-
 	private void saveMap() {
 		String mapFile = pathToSave + File.separator + "features";
 		fe.saveMap(mapFile);
 	}
 
-	private void saveModel() {
+	private void saveModel(Model model) {
 		File modelFile = new File(pathToSave + File.separator + "model");
 
 		try {
@@ -715,7 +697,6 @@ public class SegmentationSystem {
 		}
 
 	}
-
 	private void load(String path) throws ClassNotFoundException, IOException {
 		if (path.endsWith("/")) {
 			path = path.substring(0, path.length() - 1);
@@ -729,10 +710,6 @@ public class SegmentationSystem {
 		fe = new FeatureExtractor(featMapPath);
 		pathToSave = path;
 		n = fe.getFeatureMap().getSize();
-	}
-
-	public FeatureExtractor getFeatureExactor() {
-		return this.fe;
 	}
 
 	private double sigmoid(double d) {

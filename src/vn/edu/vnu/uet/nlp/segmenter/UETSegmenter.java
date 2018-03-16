@@ -1,9 +1,11 @@
 package vn.edu.vnu.uet.nlp.segmenter;
 
 import java.io.IOException;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 
 import edu.emory.clir.clearnlp.collection.pair.Pair;
@@ -57,8 +59,8 @@ public class UETSegmenter {
 	public String segmentTokenizedText(String str) {
 		StringBuffer sb = new StringBuffer();
 
-		List<String> tokens = new ArrayList<String>();
-		List<String> sentences = new ArrayList<String>();
+		List<String> tokens = new ArrayList<>();
+		List<String> sentences = new ArrayList<>();
 
 		tokens.addAll(Arrays.asList(str.split("\\s+")));
 		sentences = Tokenizer.joinSentences(tokens);
@@ -81,7 +83,8 @@ public class UETSegmenter {
      */
 	public List<Pair<String, Integer>> segmentTokenizedText(List<String> tokens) {
 		List<Pair<String, Integer>> result = new ArrayList<>();
-		result.addAll(machine.segmentTokenized(tokens));
+		List<String> normalizedTokens = tokens.stream().map(t -> Normalizer.normalize(t, Normalizer.Form.NFC)).collect(Collectors.toList());
+		result.addAll(machine.segmentTokenized(normalizedTokens));
 		return  result;
 	}
 	/**
@@ -92,8 +95,8 @@ public class UETSegmenter {
 	public String segment(String str) {
 		StringBuffer sb = new StringBuffer();
 
-		List<String> tokens = new ArrayList<String>();
-		List<String> sentences = new ArrayList<String>();
+		List<String> tokens = new ArrayList<>();
+		List<String> sentences = new ArrayList<>();
 
 		try {
 			tokens = Tokenizer.tokenize(str);
@@ -119,10 +122,10 @@ public class UETSegmenter {
 	 * @return List of segmented sentences
 	 */
 	public List<String> segmentSentences(String corpus) {
-		List<String> result = new ArrayList<String>();
+		List<String> result = new ArrayList<>();
 
-		List<String> tokens = new ArrayList<String>();
-		List<String> sentences = new ArrayList<String>();
+		List<String> tokens = new ArrayList<>();
+		List<String> sentences = new ArrayList<>();
 
 		try {
 			tokens = Tokenizer.tokenize(corpus);

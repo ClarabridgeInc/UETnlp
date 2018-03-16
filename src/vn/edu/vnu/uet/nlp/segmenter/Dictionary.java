@@ -1,6 +1,7 @@
 package vn.edu.vnu.uet.nlp.segmenter;
 
 import java.io.*;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -20,7 +21,7 @@ public class Dictionary {
 	}
 
 	public Dictionary(Set<String> loadedDict) {
-		dict = loadedDict;
+		dict = Collections.unmodifiableSet(loadedDict);
 	}
 
 	private void getInstance() {
@@ -38,7 +39,7 @@ public class Dictionary {
 			e.printStackTrace();
 		}
 		try {
-			dict = (Set<String>) ois.readObject();
+			dict = Collections.unmodifiableSet((Set<String>) ois.readObject());
 		} catch (ClassNotFoundException | IOException e) {
 			e.printStackTrace();
 		}

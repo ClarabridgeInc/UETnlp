@@ -21,8 +21,8 @@ import vn.edu.vnu.uet.nlp.utils.Logging;
  *
  */
 public class FeatureExtractor {
-	private FeatureMap featureMap;
-	private List<List<SegmentFeature>> listOfSegmentFeatureLists;
+	private FeatureMap featureMap = new FeatureMap();
+
 	private SyllableList syllableList;
 	private FamilyName familyName;
 
@@ -30,7 +30,7 @@ public class FeatureExtractor {
 	private static Set<String> normalizationSet;
 
 	static {
-		normalizationMap = new HashMap<String, String>();
+		normalizationMap = new HashMap<>();
 		normalizationMap.put("òa", "oà");
 		normalizationMap.put("óa", "oá");
 		normalizationMap.put("ỏa", "oả");
@@ -52,14 +52,12 @@ public class FeatureExtractor {
 	}
 
 	public FeatureExtractor() {
-		listOfSegmentFeatureLists = new ArrayList<List<SegmentFeature>>();
 		featureMap = new FeatureMap();
 		syllableList = new SyllableList();
 		familyName = new FamilyName();
 	}
 
 	public FeatureExtractor(String featMapPath) throws ClassNotFoundException, IOException {
-		listOfSegmentFeatureLists = new ArrayList<List<SegmentFeature>>();
 		featureMap = new FeatureMap();
 		syllableList = new SyllableList();
 		familyName = new FamilyName();
@@ -67,7 +65,6 @@ public class FeatureExtractor {
 	}
 
 	public FeatureExtractor(InputStream featMapStream, SyllableList sylList, FamilyName familyNameList) throws IOException, ClassNotFoundException {
-		listOfSegmentFeatureLists = new ArrayList<List<SegmentFeature>>();
 		featureMap = new FeatureMap();
 		loadMap(featMapStream);
 		syllableList = sylList;
@@ -83,17 +80,17 @@ public class FeatureExtractor {
 
 		}
 	}
-	public List<SyllabelFeature> extractTokenized(List<String> sentence, int mode) {
+	public ExtractedFeatures extractTokenized(List<String> sentence, int mode) {
 		List<SyllabelFeature> sylList = convertToFeatureOfSyllabel(sentence, mode);
 		return extractHelper(sylList, mode);
 	}
 
-	public List<SyllabelFeature> extract(String sentence, int mode) {
+	public ExtractedFeatures extract(String sentence, int mode) {
 		List<SyllabelFeature> sylList = convertToFeatureOfSyllabel(sentence, mode);
 		return extractHelper(sylList, mode);
 	}
 
-	public List<SyllabelFeature> extractHelper(List<SyllabelFeature> sylList, int mode) {
+	public ExtractedFeatures extractHelper(List<SyllabelFeature> sylList, int mode) {
 
 		int length = sylList.size();
 
@@ -104,7 +101,7 @@ public class FeatureExtractor {
 		SortedSet<Integer> indexSet = new TreeSet<>();
 		String featureName;
 
-		List<SegmentFeature> segfeats = new ArrayList<SegmentFeature>();
+		List<SegmentFeature> segfeats = new ArrayList<>();
 
 		for (int i = Configure.WINDOW_LENGTH; i < length - Configure.WINDOW_LENGTH - 1; i++) {
 			// ------- start feature selection -------
@@ -176,7 +173,7 @@ public class FeatureExtractor {
 			}
 			// ------- end of feature selection -------
 
-			// add label and feature vector to the list
+//			// add label and feature vector to the list
 			if (indexSet.size() > 0) {
 				segfeats.add(new SegmentFeature(sylList.get(i).getLabel(), indexSet));
 			}
@@ -186,16 +183,14 @@ public class FeatureExtractor {
 			indexSet.clear();
 		}
 
-		listOfSegmentFeatureLists.add(segfeats);
-
-		return sylList;
+		return new ExtractedFeatures(segfeats, sylList);
 	}
 
 	public List<SyllabelFeature> convertToFeatureOfSyllabel(List<String> sentence, int mode) {
 		List<String> padding = new ArrayList<>();
 		List<String> paddedSentence = new ArrayList<>();
 		if (sentence.isEmpty()) {
-			return new ArrayList<SyllabelFeature>();
+			return new ArrayList<>();
 		}
 
 		for (int i = 0; i < Configure.WINDOW_LENGTH; i++)
@@ -211,7 +206,7 @@ public class FeatureExtractor {
 		String sent = sentence.trim();
 
 		if (sent.equals(StringConst.SPACE) || sent.isEmpty()) {
-			return new ArrayList<SyllabelFeature>();
+			return new ArrayList<>();
 		}
 
 		for (int i = 0; i < Configure.WINDOW_LENGTH; i++)
@@ -221,7 +216,7 @@ public class FeatureExtractor {
 	}
 
 	public List<SyllabelFeature> token(List<String> tokens, int mode) {
-		List<SyllabelFeature> list = new ArrayList<SyllabelFeature>();
+		List<SyllabelFeature> list = new ArrayList<>();
 
 		for (String token : tokens) {
 				String tmp = normalize(token);
@@ -232,7 +227,7 @@ public class FeatureExtractor {
 
 
 	public List<SyllabelFeature> token(String sent, int mode) {
-		List<SyllabelFeature> list = new ArrayList<SyllabelFeature>();
+		List<SyllabelFeature> list = new ArrayList<>();
 		String[] tokens = sent.split("\\s+");
 
 		if (mode == Configure.TRAIN || mode == Configure.TEST) {
@@ -358,30 +353,6 @@ public class FeatureExtractor {
 
 	protected void loadMap(InputStream stream) throws ClassNotFoundException, IOException {
 		featureMap.load(stream);
-	}
-
-	protected void clearList() {
-		listOfSegmentFeatureLists.clear();
-	}
-
-	protected void clearMap() {
-		featureMap.clear();
-	}
-
-	protected int getNumSents() {
-		return this.listOfSegmentFeatureLists.size();
-	}
-
-	protected int getNumSamples() {
-		int cnt = 0;
-		for (int i = 0; i < listOfSegmentFeatureLists.size(); i++) {
-			cnt += listOfSegmentFeatureLists.get(i).size();
-		}
-		return cnt;
-	}
-
-	protected List<List<SegmentFeature>> getSegmentList() {
-		return this.listOfSegmentFeatureLists;
 	}
 
 	public int getFeatureMapSize() {

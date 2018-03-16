@@ -4,10 +4,12 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import edu.emory.clir.clearnlp.component.AbstractComponent;
 import edu.emory.clir.clearnlp.component.configuration.DecodeConfiguration;
@@ -31,7 +33,6 @@ public class UETTagger {
 	private static DecodeConfiguration config = null;
 	private final static NLPMode mode = NLPMode.pos;
 	private static AbstractComponent[] components = null;
-	private StringBuilder result;
 
 	public UETTagger() {
 		this(defaultConfigFile);
@@ -65,7 +66,7 @@ public class UETTagger {
 		String[] words = input.split("\\s+");
 		List<String> sentence = Arrays.asList(words);
 
-		result = new StringBuilder();
+		StringBuilder result = new StringBuilder();
 
 		DEPTree tree = new DEPTree(sentence);
 		process(tree, result, mode, components);
@@ -81,11 +82,11 @@ public class UETTagger {
 	 * @return POS-tagged text
 	 */
 	public List<String> tagTokenizedString(List<String> sentence) {
-
+		List<String> normalizedSentence = sentence.stream().map(t -> Normalizer.normalize(t, Normalizer.Form.NFC)).collect(Collectors.toList());
 
 		List<String> res = new ArrayList<>();
 
-		DEPTree tree = new DEPTree(sentence);
+		DEPTree tree = new DEPTree(normalizedSentence);
 		process(tree, res, mode, components);
 
 		return res;

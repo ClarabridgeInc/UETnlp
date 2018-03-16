@@ -5,11 +5,10 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.Normalizer;
 import java.text.Normalizer.Form;
+import java.util.ArrayList;
 import java.util.List;
 
-import vn.edu.vnu.uet.nlp.segmenter.Configure;
-import vn.edu.vnu.uet.nlp.segmenter.FeatureExtractor;
-import vn.edu.vnu.uet.nlp.segmenter.SegmentationSystem;
+import vn.edu.vnu.uet.nlp.segmenter.*;
 import vn.edu.vnu.uet.nlp.utils.FileUtils;
 import vn.edu.vnu.uet.nlp.utils.Logging;
 
@@ -22,6 +21,9 @@ import vn.edu.vnu.uet.nlp.utils.Logging;
 public class FullTrain {
 
 	static int cnt = 0;
+	static int numSamples = 0;
+	static int numSentences = 0;
+	static List<List<SegmentFeature>> segList = new ArrayList<>();
 
 	public static void main(String[] args) throws IOException {
 
@@ -30,6 +32,7 @@ public class FullTrain {
 		FeatureExtractor fe = new FeatureExtractor();
 
 		Logging.LOG.info("extracting features...");
+
 
 		Files.walk(Paths.get(directory)).forEach(filePath -> {
 			if (Files.isRegularFile(filePath)) {
@@ -44,12 +47,16 @@ public class FullTrain {
 					if (line.isEmpty()) {
 						continue;
 					}
-					fe.extract(Normalizer.normalize(line, Form.NFC), Configure.TRAIN);
+					ExtractedFeatures ef = fe.extract(Normalizer.normalize(line, Form.NFC), Configure.TRAIN);
+
+					numSamples += ef.getNumSamples();
+					segList.add(ef.getSegmentList());
 					if (cnt % 1000 == 0 && cnt > 0) {
 						System.out.println(cnt + " sentences extracted to features");
 					}
 				}
 				cnt += dataLines.size();
+				numSentences += dataLines.size();
 			}
 		});
 
@@ -58,7 +65,7 @@ public class FullTrain {
 
 		SegmentationSystem machine = new SegmentationSystem(fe, "original_models");
 
-		machine.train();
+		machine.train(numSamples, numSentences, segList);
 	}
 
 }

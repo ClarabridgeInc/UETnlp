@@ -9,14 +9,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.Normalizer;
 import java.text.Normalizer.Form;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 
-import vn.edu.vnu.uet.nlp.segmenter.Configure;
-import vn.edu.vnu.uet.nlp.segmenter.FeatureExtractor;
-import vn.edu.vnu.uet.nlp.segmenter.SegmentationSystem;
+import vn.edu.vnu.uet.nlp.segmenter.*;
 import vn.edu.vnu.uet.nlp.utils.FileUtils;
 import vn.edu.vnu.uet.nlp.utils.Logging;
 
@@ -32,6 +31,9 @@ public class Train {
 	 * @throws IOException
 	 */
 	private static void train(String trainingData, String modelsPath) {
+		int numSamples = 0;
+		int numSentences = 0;
+		List<List<SegmentFeature>> segList = new ArrayList<>();
 		Path path = Paths.get(trainingData);
 		BufferedReader br = null;
 
@@ -52,11 +54,15 @@ public class Train {
 			while ((line = br.readLine()) != null) {
 				if (line.isEmpty())
 					continue;
-				fe.extract(Normalizer.normalize(line, Form.NFC), Configure.TRAIN);
+				ExtractedFeatures ef = fe.extract(Normalizer.normalize(line, Form.NFC), Configure.TRAIN);
+				numSamples += ef.getNumSamples();
+				segList.add(ef.getSegmentList());
+
 				if (cnt % 1000 == 0 && cnt > 0) {
 					System.out.println(cnt + " sentences extracted to features");
 				}
 				cnt++;
+				numSentences++;
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -72,7 +78,7 @@ public class Train {
 
 		SegmentationSystem machine = new SegmentationSystem(fe, modelsPath);
 
-		machine.train();
+		machine.train(numSamples, numSentences, segList);
 	}
 
 	/**
@@ -81,6 +87,9 @@ public class Train {
 	 * @param modelsPath
 	 */
 	private static void trainFolder(String trainingFolder, String ext, String modelsPath) {
+		int numSamples = 0;
+		int numSentences = 0;
+		List<List<SegmentFeature>> segList = new ArrayList<>();
 		FeatureExtractor fe = new FeatureExtractor();
 		Logging.LOG.info("extracting features...");
 
@@ -109,12 +118,16 @@ public class Train {
 							continue;
 						}
 
-						fe.extract(Normalizer.normalize(line, Form.NFC), Configure.TRAIN);
+						ExtractedFeatures ef = fe.extract(Normalizer.normalize(line, Form.NFC), Configure.TRAIN);
+						numSamples += ef.getNumSamples();
+						segList.add(ef.getSegmentList());
+
 						if (cnt % 1000 == 0 && cnt > 0) {
 							System.out.println(cnt + " sentences extracted to features");
 						}
 					}
 					cnt += dataLines.size();
+					numSentences += dataLines.size();
 				}
 			}
 		}
@@ -124,7 +137,7 @@ public class Train {
 
 		SegmentationSystem machine = new SegmentationSystem(fe, modelsPath);
 
-		machine.train();
+		machine.train(numSamples, numSentences, segList);
 	}
 
 	/**

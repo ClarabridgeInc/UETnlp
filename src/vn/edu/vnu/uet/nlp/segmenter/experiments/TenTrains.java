@@ -9,14 +9,17 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.Normalizer;
 import java.text.Normalizer.Form;
+import java.util.ArrayList;
+import java.util.List;
 
-import vn.edu.vnu.uet.nlp.segmenter.Configure;
-import vn.edu.vnu.uet.nlp.segmenter.FeatureExtractor;
-import vn.edu.vnu.uet.nlp.segmenter.SegmentationSystem;
+import vn.edu.vnu.uet.nlp.segmenter.*;
 
 public class TenTrains {
 
 	public static void main(String[] args) throws IOException {
+		int numSamples = 0;
+		int numSentences = 0;
+		List<List<SegmentFeature>> segList = new ArrayList<>();
 
 		for (int i = 0; i < 10; i++) {
 			System.out.println("--------------------fold " + i + "--------------------");
@@ -37,10 +40,14 @@ public class TenTrains {
 			while ((line = br.readLine()) != null) {
 				if (line.isEmpty())
 					continue;
-				fe.extract(Normalizer.normalize(line, Form.NFC), Configure.TRAIN);
+				ExtractedFeatures ef = fe.extract(Normalizer.normalize(line, Form.NFC), Configure.TRAIN);
+				numSamples += ef.getNumSamples();
+				segList.add(ef.getSegmentList());
+
 				if (cnt % 1000 == 0 && cnt > 0) {
 					System.out.println(cnt + " sentences extracted to features");
 				}
+				numSentences++;
 				cnt++;
 			}
 			System.out.println(cnt + " sentences extracted to features");
@@ -48,7 +55,7 @@ public class TenTrains {
 			br.close();
 
 			SegmentationSystem machine = new SegmentationSystem(fe, "testmodels/models_" + i);
-			machine.train();
+			machine.train(numSamples, numSentences, segList);
 
 		}
 

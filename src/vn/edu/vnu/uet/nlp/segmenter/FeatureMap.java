@@ -6,7 +6,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -16,14 +18,10 @@ import java.util.Set;
  *
  */
 public class FeatureMap {
-	private HashMap<String, Integer> map;
+	private Map<String, Integer> map;
 
 	public FeatureMap() {
-		map = new HashMap<String, Integer>(100000);
-	}
-
-	public void clear() {
-		this.map.clear();
+		map = new HashMap<>(100000);
 	}
 
 	public Integer getIndex(String feature, int mode) {
@@ -35,7 +33,7 @@ public class FeatureMap {
 			}
 
 			// TRAIN mode
-			map.put(feature, new Integer(map.size()));
+			map.put(feature, map.size());
 
 			if (getSize() % 50000 == 0 && getSize() > 0) {
 				System.out.println("\t\t\t\t\t\tNumber of unique features: " + getSize());
@@ -44,7 +42,7 @@ public class FeatureMap {
 			return map.size() - 1;
 
 		} else {
-			return map.get(feature).intValue();
+			return map.get(feature);
 		}
 	}
 
@@ -56,13 +54,13 @@ public class FeatureMap {
 	public void load(String path) throws IOException, ClassNotFoundException {
 		FileInputStream fin = new FileInputStream(path);
 		ObjectInputStream ois = new ObjectInputStream(fin);
-		map = (HashMap<String, Integer>) ois.readObject();
+		map = Collections.unmodifiableMap((HashMap<String, Integer>) ois.readObject());
 		ois.close();
 	}
 
 	public void load(InputStream stream) throws IOException, ClassNotFoundException {
 		ObjectInputStream ois = new ObjectInputStream(stream);
-		map = (HashMap<String, Integer>) ois.readObject();
+		map = Collections.unmodifiableMap((HashMap<String, Integer>) ois.readObject());
 		ois.close();
 	}
 

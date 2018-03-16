@@ -1,6 +1,7 @@
 package vn.edu.vnu.uet.nlp.segmenter;
 
 import java.io.*;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -20,7 +21,7 @@ public class FamilyName {
 	}
 
 	public FamilyName(Set<String> loadedList) {
-		nameList = loadedList;
+		nameList = Collections.unmodifiableSet(loadedList);
 	}
 
 	private void getInstance() {
@@ -38,7 +39,7 @@ public class FamilyName {
 			e.printStackTrace();
 		}
 		try {
-			nameList = (Set<String>) ois.readObject();
+			nameList = Collections.unmodifiableSet((Set<String>) ois.readObject());
 		} catch (ClassNotFoundException | IOException e) {
 			e.printStackTrace();
 		}

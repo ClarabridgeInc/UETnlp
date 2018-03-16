@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -26,11 +27,11 @@ public class RareNames {
 	}
 
 	public RareNames(Set<String> nameList) {
-		list = nameList;
+		list = Collections.unmodifiableSet(nameList);
 	}
 
 	private void getInstance() {
-		list = new HashSet<String>();
+		Set<String> loadedList = new HashSet<>();
 
 		Path p = Paths.get(path);
 		BufferedReader br = null;
@@ -40,13 +41,14 @@ public class RareNames {
 
 			while ((line = br.readLine()) != null) {
 				if (!line.isEmpty()) {
-					list.add(line.toLowerCase().trim());
+					loadedList.add(line.toLowerCase().trim());
 				}
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
 			System.err.println("The dictionary of rare names 'dictionary/rare_names.txt' is not found!");
 		}
+		list = Collections.unmodifiableSet(loadedList);
 	}
 
 	public boolean isRareName(String word) {

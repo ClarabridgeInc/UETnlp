@@ -8,10 +8,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.Normalizer;
 import java.text.Normalizer.Form;
+import java.util.ArrayList;
+import java.util.List;
 
-import vn.edu.vnu.uet.nlp.segmenter.Configure;
-import vn.edu.vnu.uet.nlp.segmenter.FeatureExtractor;
-import vn.edu.vnu.uet.nlp.segmenter.SegmentationSystem;
+import vn.edu.vnu.uet.nlp.segmenter.*;
 import vn.edu.vnu.uet.nlp.utils.Logging;
 
 /**
@@ -23,6 +23,10 @@ import vn.edu.vnu.uet.nlp.utils.Logging;
 public class Train {
 
 	public static void main(String[] args) throws IOException {
+		int numSamples = 0;
+		int numSentences = 0;
+		List<List<SegmentFeature>> segList = new ArrayList<>();
+
 		String fold = "0";
 		Path path = Paths.get("data/train_" + fold + ".txt");
 		BufferedReader br = Files.newBufferedReader(path, StandardCharsets.UTF_8);
@@ -35,11 +39,15 @@ public class Train {
 		while ((line = br.readLine()) != null) {
 			if (line.isEmpty())
 				continue;
-			fe.extract(Normalizer.normalize(line, Form.NFC), Configure.TRAIN);
+			ExtractedFeatures ef = fe.extract(Normalizer.normalize(line, Form.NFC), Configure.TRAIN);
+			numSamples += ef.getNumSamples();
+			segList.add(ef.getSegmentList());
+
 			if (cnt % 1000 == 0 && cnt > 0) {
 				System.out.println(cnt + " sentences extracted to features");
 			}
 			cnt++;
+			numSentences++;
 		}
 		System.out.println(cnt + " sentences extracted to features");
 		System.out.println("\t\t\t\t\t\tTotal number of unique features: " + fe.getFeatureMapSize());
@@ -47,7 +55,7 @@ public class Train {
 
 		SegmentationSystem machine = new SegmentationSystem(fe, "testmodels/models_" + fold);
 
-		machine.train();
+		machine.train(numSamples, numSentences, segList);
 
 	}
 

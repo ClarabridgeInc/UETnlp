@@ -1,6 +1,7 @@
 package vn.edu.vnu.uet.nlp.segmenter;
 
 import java.io.*;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -16,7 +17,7 @@ public class SyllableList {
 	private static String path = "dictionary/VNsylObject";
 
 	public SyllableList(Set<String> loadedList) {
-		sylList = loadedList;
+		sylList = Collections.unmodifiableSet(loadedList);
 	}
 
 	public SyllableList() {
@@ -24,7 +25,7 @@ public class SyllableList {
 	}
 
 	private void getInstance() {
-		sylList = new HashSet<String>();
+		sylList = new HashSet<>();
 		FileInputStream fin = null;
 		try {
 			fin = new FileInputStream(path);
@@ -38,7 +39,7 @@ public class SyllableList {
 			e.printStackTrace();
 		}
 		try {
-			sylList = (Set<String>) ois.readObject();
+			sylList = Collections.unmodifiableSet((Set<String>) ois.readObject());
 		} catch (ClassNotFoundException | IOException e) {
 			e.printStackTrace();
 		}
