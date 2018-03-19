@@ -1,6 +1,5 @@
 package vn.edu.vnu.uet.nlp.utils;
 
-import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Logger;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -10,9 +9,6 @@ import org.kohsuke.args4j.CmdLineParser;
  *
  */
 public class Logging {
-	static {
-		BasicConfigurator.configure();
-	}
 
 	private Logging() {
 	}
